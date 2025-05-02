@@ -1,0 +1,28 @@
+name: flight_search_tool
+description: Search multiple suppliers and return raw flight quotes
+input:
+  type: object
+  properties:
+    origin:       { type: string }
+    destination:  { type: string }
+    depart_date:  { type: string }
+    return_date:  { type: string }
+    pax:          { type: integer }
+required: [origin, destination, depart_date, pax]
+output:
+  type: array
+  items:
+    $ref: "#/$defs/Quote"
+$defs:
+  Quote:
+    type: object
+    properties:
+      supplier:   { type: string }
+      price:      { type: number }
+      currency:   { type: string }
+      deep_link:  { type: string }
+      fetched_at: { type: string }
+    required: [supplier, price, currency, deep_link, fetched_at]
+runtime:
+  # local:// means call Python function directly
+  handler: local://app.tools.flight_search:run
