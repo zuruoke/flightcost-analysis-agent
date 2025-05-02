@@ -20,6 +20,7 @@ class Quote(BaseModel):
 SUPPLIERS = [
     ("skyscanner", "https://api.example.com/sky"),
     ("amadeus",    "https://api.example.com/amadeus"),
+    ("kiwi",       "https://api.tequila.kiwi.com/v2/search")
 ]
 
 async def _fetch(session, supplier, url, params):

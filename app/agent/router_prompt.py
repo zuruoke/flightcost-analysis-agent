@@ -1,5 +1,4 @@
-# agent/router_prompt.py
-PROMPT = """
+ROUTER_PROMPT = """
 You are Flight-Orchestrator v0.1 (MCP).
 Given `state_json`, decide the next tool.
 

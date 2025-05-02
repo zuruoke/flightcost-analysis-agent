@@ -1,4 +1,3 @@
-# agent/router_schema.py
 from typing import Literal, Dict
 from pydantic import BaseModel
 from agent.constants import ALLOWED_TOOL_NAMES

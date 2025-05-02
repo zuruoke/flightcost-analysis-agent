@@ -1,19 +1,17 @@
-# agent/graph.py
-import json, asyncio
 from pathlib import Path
 from langgraph.graph import StateGraph, END
 from langchain_openai import ChatOpenAI
 from langchain.output_parsers import PydanticOutputParser
-from langchain_mcp_adapters.tools import load_mcp_tool
+from agent.manifest_loader import load_tool_from_manifest
 
 from agent.state import GraphState
-from agent.router_prompt import PROMPT
+from agent.router_prompt import ROUTER_PROMPT
 from agent.router_schema import RouterDecision
-from agent.constants import ALLOWED_TOOL_NAMES, MAX_ROUTER_RETRIES
+from agent.constants import MAX_ROUTER_RETRIES
 
 # ──────────────────────────── load MCP tools ────────────────────────────
 MANIFEST_DIR = Path(__file__).parent.parent / "tools" / "manifests"
-load = lambda n: load_mcp_tool(MANIFEST_DIR / f"{n}.yaml")
+load = lambda n: load_tool_from_manifest(MANIFEST_DIR / f"{n}.yaml")
 
 t_flight = load("flight_search")
 t_agg    = load("aggregator")
@@ -25,7 +23,7 @@ parser      = PydanticOutputParser(pydantic_object=RouterDecision)
 router_llm  = ChatOpenAI(
     model="gpt-4o-mini",
     temperature=0,
-    system=PROMPT + parser.get_format_instructions(),
+    system=ROUTER_PROMPT + parser.get_format_instructions(),
 )
 
 def router(state: GraphState) -> str:
@@ -38,9 +36,9 @@ def router(state: GraphState) -> str:
         try:
             decision = parser.parse(raw)
             return decision.tool_name
-        except Exception as exc:            # ValidationError, JSONDecodeError …
+        except Exception as exc:           
             if attempt == MAX_ROUTER_RETRIES:
-                # Fallback: deterministic rules hard-coded
+                
                 if not state.quotes:
                     return "flight_search_tool"
                 if not state.agg_quotes:

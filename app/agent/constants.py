@@ -1,4 +1,3 @@
-# agent/constants.py
 ALLOWED_TOOL_NAMES = (
     "flight_search_tool",
     "aggregator_tool",
@@ -8,4 +7,4 @@ ALLOWED_TOOL_NAMES = (
     "finish",
 )
 
-MAX_ROUTER_RETRIES = 2        # retry the LLM once if it outputs bad JSON
+MAX_ROUTER_RETRIES = 2 
