@@ -1,78 +1,116 @@
-from pathlib import Path
+"""
+Build and compile the LangGraph DAG.
+
+• Discovers all tools from the “FlightTools” FastMCP server (tools container)
+  via MultiServerMCPClient + SSE.
+• Keeps the router LLM schema-guarded and retry-safe.
+• Exposes the compiled graph as `flight_agent`.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+from contextlib import asynccontextmanager
+from typing import Dict, Any
+
 from langgraph.graph import StateGraph, END
 from langchain_openai import ChatOpenAI
 from langchain.output_parsers import PydanticOutputParser
-from agent.manifest_loader import load_tool_from_manifest
+from langchain_mcp_adapters.client import MultiServerMCPClient
+from langchain_mcp_adapters.tools import load_mcp_tools
+from langchain.tools import StructuredTool
 
 from agent.state import GraphState
-from agent.router_prompt import ROUTER_PROMPT
 from agent.router_schema import RouterDecision
-from agent.constants import MAX_ROUTER_RETRIES
+from agent.router_prompt import PROMPT
+from agent.constants import ALLOWED_TOOL_NAMES, MAX_ROUTER_RETRIES
 
-# ──────────────────────────── load MCP tools ────────────────────────────
-MANIFEST_DIR = Path(__file__).parent.parent / "tools" / "manifests"
-load = lambda n: load_tool_from_manifest(MANIFEST_DIR / f"{n}.yaml")
 
-t_flight = load("flight_search")
-t_agg    = load("aggregator")
-t_shot   = load("screenshot")
-t_stats  = load("analytics")
+# ────────────────────────────── MCP discovery ──────────────────────────────
+TOOLS_SSE_URL = "http://tools:7000/sse"    
 
-# ─────────────────────── router LLM + schema guard ──────────────────────
-parser      = PydanticOutputParser(pydantic_object=RouterDecision)
-router_llm  = ChatOpenAI(
+
+@asynccontextmanager
+async def discover_tool_map() -> Dict[str, StructuredTool]:
+    """
+    Connect to one (or many) MCP servers and yield a {name: tool} mapping.
+    We wrap it in a context-manager so the network session is gracefully closed
+    once the graph has loaded the tools.
+    """
+    async with MultiServerMCPClient(
+        {
+            "flighttools": {
+                "url": TOOLS_SSE_URL,
+                "transport": "sse",
+            }
+        }
+    ) as client:
+        tools = await load_mcp_tools(client.session)      # list[StructuredTool]
+        yield {t.name: t for t in tools}
+
+
+# Because LangGraph builds the DAG at import-time we synchronously pull the tools
+# once.  If you prefer non-blocking startup, move this call into a FastAPI
+# startup event and rebuild the graph there.
+tool_map: Dict[str, StructuredTool]
+tool_cm = discover_tool_map()
+tool_map = asyncio.run(tool_cm.__aenter__())      # noqa: E402  (top-level)
+
+# Alias for clarity
+t_flight = tool_map["flight_search"]
+t_agg    = tool_map["aggregator"]
+t_shot   = tool_map["screenshot"]
+t_stats  = tool_map["analytics"]
+
+# ───────────────────────────── Router LLM node ─────────────────────────────
+parser     = PydanticOutputParser(pydantic_object=RouterDecision)
+router_llm = ChatOpenAI(
     model="gpt-4o-mini",
-    temperature=0,
-    system=ROUTER_PROMPT + parser.get_format_instructions(),
+    temperature=0.0,
+    system=PROMPT + parser.get_format_instructions(),
 )
 
 def router(state: GraphState) -> str:
-    """
-    Ask the LLM for next tool; schema-validate; retry on failure;
-    fall back to deterministic logic on last resort.
-    """
-    for attempt in range(1 + MAX_ROUTER_RETRIES):
+    """Return the next tool name. Retries once on schema error, then falls back."""
+    for _ in range(1 + MAX_ROUTER_RETRIES):
         raw = router_llm.invoke({"state_json": state.model_dump_json()})
         try:
-            decision = parser.parse(raw)
-            return decision.tool_name
-        except Exception as exc:           
-            if attempt == MAX_ROUTER_RETRIES:
-                
-                if not state.quotes:
-                    return "flight_search_tool"
-                if not state.agg_quotes:
-                    return "aggregator_tool"
-                if not state.screenshots:
-                    return "screenshot_tool"
-                if not state.analytics:
-                    return "analytics_tool"
-                return "response_builder"
+            return parser.parse(raw).tool_name
+        except Exception:
+            continue
+    # deterministic fallback
+    if not state.quotes:
+        return "flight_search_tool"
+    if not state.agg_quotes:
+        return "aggregator_tool"
+    if not state.screenshots:
+        return "screenshot_tool"
+    if not state.analytics:
+        return "analytics_tool"
+    return "response_builder"
 
-# ───────────────────────── response builder LLM ─────────────────────────
+# ─────────────────────────── Response-builder LLM ───────────────────────────
 answer_llm = ChatOpenAI(
     model="gpt-4o-mini",
     temperature=0.7,
     system=(
-        "You are a friendly travel concierge. Produce markdown containing:\n"
-        "• A short price summary\n"
-        "• A table of the 5 cheapest itineraries (price, airline, link)\n"
-        "• <img> tags for every screenshot URL in state.screenshots."
+        "You are a friendly travel concierge. "
+        "Return markdown with:\n"
+        "• summary paragraph\n• table of 5 cheapest quotes\n• <img> tags for screenshots"
     ),
 )
 
-# ───────────────────────────── build the DAG ────────────────────────────
+# ──────────────────────────────── Build DAG ────────────────────────────────
 g = StateGraph(GraphState)
 
-# Nodes
-g.add_node("router",       router)
-g.add_node("flight_search",t_flight)
-g.add_node("aggregate",    t_agg)
-g.add_node("screenshot",   t_shot)
-g.add_node("analytics",    t_stats)
+g.add_node("router", router)
+g.add_node("flight_search", t_flight)
+g.add_node("aggregate",     t_agg)
+g.add_node("screenshot",    t_shot)
+g.add_node("analytics",     t_stats)
 g.add_node("response_builder", answer_llm)
 
-# Router → next-tool edges
 g.add_conditional_edges(
     "router",
     {
@@ -85,11 +123,17 @@ g.add_conditional_edges(
     },
 )
 
-# Deterministic nodes loop back to router
-for name in ["flight_search", "aggregate", "screenshot", "analytics"]:
+# deterministic tools loop back to router
+for name in ("flight_search", "aggregate", "screenshot", "analytics"):
     g.add_edge(name, "router")
 
-# After the answer LLM, we’re done
+# after we craft the final answer we end the run
 g.add_edge("response_builder", END)
 
-flight_agent = g.compile()     # ← import-time, thread-safe
+flight_agent = g.compile()
+
+# ───────────────────────── cleanup after import ────────────────────────────
+# Close the client session now that the tools are loaded
+asyncio.run(tool_cm.__aexit__(None, None, None))
+
+__all__ = ["flight_agent"]
