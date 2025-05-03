@@ -1,6 +1,6 @@
 from typing import Literal, Dict
 from pydantic import BaseModel
-from agent.constants import ALLOWED_TOOL_NAMES
+from app.agent.constants import ALLOWED_TOOL_NAMES
 
 class RouterDecision(BaseModel):
     """The exact JSON layout the router LLM **must** produce."""

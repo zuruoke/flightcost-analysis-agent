@@ -73,6 +73,10 @@ def main():
             
             # Add the search query to messages
             st.session_state.messages.append({"role": "user", "content": query})
+
+            print(st.session_state.messages)
+            print("--------------------------------")
+            print(query)
             
             # Invoke the graph
             response = flight_agent.invoke(
