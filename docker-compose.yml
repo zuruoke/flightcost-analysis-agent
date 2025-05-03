@@ -6,16 +6,7 @@ services:
       dockerfile: app.Dockerfile
     ports: ["8000:8000"]
     env_file: [.env]
-    depends_on: [tools, redis]
-  
-  tools:                 
-    build:
-      context: .
-      dockerfile: tools_server/Dockerfile
-    container_name: flight_tool_server
-    ports: ["7000:7000"] 
-    env_file: [.env]
-    depends_on: [redis]   
+    depends_on: [redis] 
 
   celery_worker:         
     build:

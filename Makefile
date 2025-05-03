@@ -2,6 +2,9 @@ install:
 	pip install uv
 	uv sync
 
+agent:
+	streamlit run app/home.py
+
 set-env:
 	@if [ -z "$(ENV)" ]; then \
 		echo "ENV is not set. Usage: make set-env ENV=development|staging|production"; \
@@ -150,3 +153,4 @@ help:
 	@echo "  docker-compose-up: Start the entire stack (API, Prometheus, Grafana)"
 	@echo "  docker-compose-down: Stop the entire stack"
 	@echo "  docker-compose-logs: View logs from all services"
+	@echo"   agent: Start the agent process

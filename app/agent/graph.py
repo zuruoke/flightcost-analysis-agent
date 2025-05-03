@@ -11,6 +11,8 @@ from __future__ import annotations
 import asyncio
 from contextlib import asynccontextmanager
 from typing import Dict
+from langgraph.checkpoint.memory import MemorySaver
+from langchain_core.callbacks.base import BaseCallbackHandler
 
 from langgraph.graph import StateGraph, END
 from langchain_openai import ChatOpenAI
@@ -108,6 +110,7 @@ answer_llm = ChatOpenAI(
 )
 
 # ──────────────────────────────── Build DAG ────────────────────────────────
+memory = MemorySaver()
 g = StateGraph(GraphState)
 
 g.add_node("router",          router)
@@ -136,7 +139,7 @@ for name in ("flight_search", "aggregate", "screenshot", "analytics"):
 # after crafting the final answer we end the run
 g.add_edge("response_builder", END)
 
-flight_agent = g.compile()
+flight_agent = g.compile(checkpointer=memory)
 
 # ───────────────────────── cleanup after import ────────────────────────────
 asyncio.run(tool_cm.__aexit__(None, None, None))
