@@ -1,5 +1,5 @@
 [project]
-name = "travel-flight-agent"
+name = "app"
 version = "0.1.0"
 description = ""
 authors = [
@@ -7,7 +7,7 @@ authors = [
 ]
 license = {text = "MIT, COZN"}
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.115.12",
     "langchain>=0.3.22",
@@ -36,7 +36,11 @@ dependencies = [
     "tqdm>=4.67.1",
     "colorama>=0.4.6",
     "langchain-mcp-adapters>=0.0.9",
-    "streamlit>=1.45.0"
+    "streamlit>=1.45.0",
+    "slowapi>=0.1.9",
+    "boto3==1.38.8",
+    "playwright==1.52.0",
+    "celery==5.5.2"
 
 ]
 
