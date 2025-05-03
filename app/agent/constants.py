@@ -7,4 +7,4 @@ ALLOWED_TOOL_NAMES = (
     "finish",
 )
 
-MAX_ROUTER_RETRIES = 2 
+MAX_ROUTER_RETRIES = 0 

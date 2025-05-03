@@ -2,10 +2,9 @@ import time
 from typing import Annotated, Any, Dict, List, TypedDict
 import streamlit as st
 from langchain_core.callbacks.base import BaseCallbackHandler
-from langgraph.graph.message import add_messages
 from langchain_core.messages import HumanMessage, AIMessage
 import datetime
-from agent.graph import flight_agent
+from app.agent.graph import flight_agent
 
 class StreamHandler(BaseCallbackHandler):
     def __init__(self, container):
@@ -16,10 +15,6 @@ class StreamHandler(BaseCallbackHandler):
     def on_llm_new_token(self, token, **kwargs):
         self.text += token
         self.placeholder.markdown(self.text)
-
-class State(TypedDict):
-    messages: Annotated[list, add_messages]
-    sources: List[Dict[str, Any]]
 
 def main():
     # Page configuration
@@ -66,7 +61,6 @@ def main():
             if trip_type == "Round Trip":
                 query += f"Return flight on {return_date.strftime('%Y-%m-%d')}."
         
-            
             # Create message container for results
             results_container = st.container()
             stream_handler = StreamHandler(results_container)
@@ -77,10 +71,20 @@ def main():
             print(st.session_state.messages)
             print("--------------------------------")
             print(query)
+
+            # Create the initial state
+            initial_state = {
+                "user_query": query,
+                "quotes": [],
+                "agg_quotes": [],
+                "screenshots": [],
+                "analytics": {},
+                "final_markdown": ""
+            }
             
             # Invoke the graph
             response = flight_agent.invoke(
-                {"messages": [HumanMessage(content=query)], "sources": []},
+                initial_state,
                 {
                     "configurable": {"thread_id": st.session_state.thread_id},
                     "callbacks": [stream_handler],
@@ -90,7 +94,10 @@ def main():
             # Display the results
             st.subheader("Search Results")
             with results_container:
-                st.write(response["messages"][-1].content)
+                if "final_markdown" in response and response["final_markdown"]:
+                    st.markdown(response["final_markdown"])
+                else:
+                    st.info("No results found. Please try a different search.")
 
 
 if __name__ == "__main__":

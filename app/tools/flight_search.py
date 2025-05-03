@@ -3,7 +3,11 @@ from datetime import datetime, timedelta
 from typing import Optional, List
 import os
 import httpx
+import logging
 from app.tools.models.flight_search_model import Quote, Segment
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 KIWI_API   = "https://api.tequila.kiwi.com/v2/search"
 CURRENCY   = "GBP"
@@ -18,8 +22,11 @@ async def flight_search_request(
     """
     Return a list of ``Quote`` objects. All prices are in GBP.
     """
+    logger.info(f"Starting flight search: {origin} -> {destination} on {departure_date} for {number_of_adults} adults")
+    
     if departure_date is None:
         departure_date = (datetime.utcnow() + timedelta(days=7)).strftime("%Y-%m-%d")
+        logger.info(f"No departure date provided, using default: {departure_date}")
 
     params = {
         "fly_from":       origin.upper(),
@@ -35,30 +42,34 @@ async def flight_search_request(
         "sort":           "price",
     }
 
+    logger.debug(f"API request params: {params}")
     headers = {"apikey": API_KEY}
 
-    async with httpx.AsyncClient(timeout=20) as client:
-        r = await client.get(KIWI_API, params=params, headers=headers)
-        r.raise_for_status()
-        payload = r.json()
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            logger.info("Making API request to Kiwi...")
+            r = await client.get(KIWI_API, params=params, headers=headers)
+            r.raise_for_status()
+            payload = r.json()
+            logger.debug(f"API response: {payload}")
 
-    if "data" not in payload or not payload["data"]:
-        return []                                                # <- empty list is fine
+        if "data" not in payload or not payload["data"]:
+            logger.warning("No flight data found in API response")
+            return []
 
-    quotes: list[Quote] = []
-    for flight in payload["data"]:
-        segments: list[Segment] = []
-        for s in flight["route"]:
-            segments.append(
-                Segment(
-                    airline=s["airline"],
-                    local_departure=s["local_departure"],
-                    local_arrival=s["local_arrival"],
+        quotes: list[Quote] = []
+        for flight in payload["data"]:
+            segments: list[Segment] = []
+            for s in flight["route"]:
+                segments.append(
+                    Segment(
+                        airline=s["airline"],
+                        local_departure=s["local_departure"],
+                        local_arrival=s["local_arrival"],
+                    )
                 )
-            )
 
-        quotes.append(
-            Quote(
+            quote = Quote(
                 price=flight["price"],
                 departure=segments[0].local_departure,
                 arrival=segments[-1].local_arrival,
@@ -66,6 +77,15 @@ async def flight_search_request(
                 stops=len(segments) - 1,
                 deep_link=flight["deep_link"],
             )
-        )
+            logger.info(f"Found flight: {quote.model_dump()}")
+            quotes.append(quote)
 
-    return quotes
+        logger.info(f"Found {len(quotes)} flights")
+        return quotes
+
+    except httpx.HTTPError as e:
+        logger.error(f"HTTP error during flight search: {str(e)}")
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error during flight search: {str(e)}")
+        raise
