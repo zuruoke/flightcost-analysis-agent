@@ -1,7 +1,9 @@
 from __future__ import annotations
-import argparse
 from typing import List, Optional
 from mcp.server.fastmcp import FastMCP
+
+from app.agent.state import UserQuery
+from app.tools.flight_search import FlightSearchToolRequest
 
 mcp = FastMCP("FlightTools")
 
@@ -10,12 +12,11 @@ mcp = FastMCP("FlightTools")
     description="Return three cheapest one-way economy flights (GBP)"
 )
 async def flight_search(
-    origin: str,
-    destination: str,
-    number_of_adults: int = 1,
-    departure_date: Optional[str] = None,
+    user_query: UserQuery
 ) -> List[dict]:
-    # TODO: Implement the logic to search for flights
+    request = FlightSearchToolRequest(user_query)
+    await request.run()
+   
     return [
         {"price": 100, "deep_link": "http://a.com"},
         {"price": 120, "deep_link": "http://b.com"},

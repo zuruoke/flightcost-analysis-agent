@@ -11,7 +11,7 @@ from typing import Dict, Any
 
 from app.agent.client import get_client
 from app.agent.graph import build_agent
-from app.agent.state import GraphState
+from app.agent.state import FlightClass, FlightType, GraphState, UserQuery
 
 # Configure logging
 log = logging.getLogger(__name__)
@@ -34,10 +34,16 @@ async def run_agent(payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
         # Initialize state
         init_state = GraphState(
-            origin=payload['origin'].upper(),
-            destination=payload['destination'].upper(),
-            num_adults=payload.get('num_adults', 1),
-            departure_date=payload['departure_date'],
+            user_query=UserQuery(
+                origin=payload['origin'].upper(),
+                destination=payload['destination'].upper(),
+                num_adults=payload.get('num_adults', 1),
+                departure_date=payload['departure_date'],
+                num_children=payload.get('num_children', 0),
+                flight_class=payload.get('flight_class', FlightClass.ECONOMY),
+                flight_type=payload.get('flight_type', FlightType.ONE_WAY),
+                duration=payload.get('duration', None),
+            )
         )
 
         # Execute agent

@@ -89,12 +89,7 @@ async def build_agent(client):
         Returns:
             dict: Flight quotes
         """
-        raw = await t_flight.ainvoke({
-            "origin": s.origin,
-            "destination": s.destination,
-            "number_of_adults": s.num_adults,
-            "departure_date": s.departure_date,
-        })
+        raw = await t_flight.ainvoke({"user_query": s.user_query.model_dump()})
         return {"quotes": _as_python(raw)}
 
     @trace("agg")

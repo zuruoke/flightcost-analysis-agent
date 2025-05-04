@@ -8,6 +8,7 @@ import streamlit as st
 import asyncio
 from datetime import datetime, timedelta
 from app.agent.runner import run_agent
+from app.agent.state import FlightClass, FlightType, UserQuery
 
 # Configure page
 st.set_page_config(
@@ -37,9 +38,9 @@ with st.sidebar:
     # Origin and destination
     col1, col2 = st.columns(2)
     with col1:
-        origin = st.text_input("Origin (e.g., LHR)", max_chars=3, value="LHR").upper()
+        origin = st.text_input("Origin (e.g., LOS)", max_chars=3, value="LOS").upper()
     with col2:
-        destination = st.text_input("Destination (e.g., JFK)", max_chars=3, value="JFK").upper()
+        destination = st.text_input("Destination (e.g., LON)", max_chars=3, value="LON").upper()
     
     # Number of adults
     adults = st.number_input("Number of Adults", min_value=1, max_value=9, value=1)
@@ -58,11 +59,15 @@ with st.sidebar:
 if st.button("Search Flights", type="primary"):
     try:
         # Prepare request
-        user_request = {
+        user_request: UserQuery = {
             "origin": origin,
             "destination": destination,
             "num_adults": adults,
             "departure_date": departure_date.strftime("%Y-%m-%d"),
+            "num_children": 0,
+            "flight_class": FlightClass.ECONOMY.value,
+            "flight_type": FlightType.ONE_WAY.value,
+            "duration": None
         }
         
         # Show progress
