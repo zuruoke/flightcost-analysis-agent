@@ -13,15 +13,12 @@ with each node representing a specific task in the flight search process.
 """
 
 from __future__ import annotations
-from contextlib import asynccontextmanager
-import asyncio
 import logging
-from typing import Dict, List, Optional
+from typing import Dict
 
 from langgraph.graph import StateGraph, START, END
 from langchain_core.tools import StructuredTool
 
-from app.agent.client import get_client
 from app.agent.state import GraphState
 from app.agent.tracing import trace, _as_python
 
